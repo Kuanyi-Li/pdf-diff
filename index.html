@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF 比對</title>
+<meta name="description" content="在瀏覽器中比對兩份 PDF 的文字內容，並標示差異。檔案不會上傳。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f5d50'/%3E%3Cpath d='M8 9h7v14H8zM17 9h7v14h-7z' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1>PDF 比對</h1>
+  <p class="sub">比對兩份 PDF 的文字內容並標示差異。檔案只在你的瀏覽器中處理，不會上傳。</p>
+</header>
+
+<main>
+  <section class="drops" aria-label="選擇檔案">
+    <label class="drop" id="dropA" for="fileA">
+      <span class="tag">原始版本</span>
+      <span class="name" id="nameA">拖曳 PDF 到這裡，或點擊選擇</span>
+      <span class="meta" id="metaA"></span>
+      <input type="file" id="fileA" accept="application/pdf,.pdf" hidden>
+    </label>
+    <button class="swap" id="swap" type="button" title="左右對調" aria-label="左右對調">⇄</button>
+    <label class="drop" id="dropB" for="fileB">
+      <span class="tag">修改後版本</span>
+      <span class="name" id="nameB">拖曳 PDF 到這裡，或點擊選擇</span>
+      <span class="meta" id="metaB"></span>
+      <input type="file" id="fileB" accept="application/pdf,.pdf" hidden>
+    </label>
+  </section>
+
+  <section class="opts" aria-label="比對選項">
+    <label><input type="checkbox" id="optCase"> 忽略大小寫</label>
+    <label><input type="checkbox" id="optSpace"> 忽略空白差異</label>
+    <label>顯示範圍
+      <select id="optView">
+        <option value="context">只顯示差異與前後文</option>
+        <option value="all">顯示全部</option>
+      </select>
+    </label>
+    <button id="go" type="button" class="primary" disabled>開始比對</button>
+  </section>
+
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+
+  <section id="result" hidden>
+    <div class="bar">
+      <div class="stats" id="stats"></div>
+      <div class="nav">
+        <button type="button" id="prev" title="上一處差異 (p)">↑ 上一處</button>
+        <span id="pos">0 / 0</span>
+        <button type="button" id="next" title="下一處差異 (n)">↓ 下一處</button>
+      </div>
+    </div>
+    <div class="heads"><div>原始版本</div><div>修改後版本</div></div>
+    <div id="diff" class="diff"></div>
+  </section>
+</main>
+
+<footer>
+  <p>以文字內容比對；多欄排版、表格或掃描檔（圖片）的結果可能不理想。使用 <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> 與 <a href="https://github.com/kpdecker/jsdiff">jsdiff</a>。</p>
+</footer>
+
+<script src="vendor/pdf.min.js"></script>
+<script src="vendor/diff.min.js"></script>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
