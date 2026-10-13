@@ -34,6 +34,8 @@
   <section class="opts" aria-label="比對選項">
     <label><input type="checkbox" id="optCase"> 忽略大小寫</label>
     <label><input type="checkbox" id="optSpace"> 忽略空白差異</label>
+    <label title="自動排除每一頁都重複出現的頁首/頁尾（例如產生日期、頁碼）"><input type="checkbox" id="optHdr" checked> 忽略每頁重複的頁首/頁尾</label>
+    <label title="輸出已劃記的 PDF 時，移除原檔中既有的螢光標示（不會修改你的原始檔案）"><input type="checkbox" id="optStrip" checked> 輸出時移除原檔既有螢光標示</label>
     <label>顯示範圍
       <select id="optView">
         <option value="context">只顯示差異與前後文</option>
@@ -46,6 +48,13 @@
   <p id="status" class="status" role="status" aria-live="polite"></p>
 
   <section id="result" hidden>
+    <div class="dl" id="dl" hidden>
+      <div class="legend"><i class="dot del"></i>紅色：修訂前被刪除／修改的內容　<i class="dot add"></i>綠色：修訂後新增／修改的內容</div>
+      <div class="btns">
+        <button type="button" id="dlA" class="primary alt">下載修訂前（已劃記）</button>
+        <button type="button" id="dlB" class="primary alt">下載修訂後（已劃記）</button>
+      </div>
+    </div>
     <div class="bar">
       <div class="stats" id="stats"></div>
       <div class="nav">
@@ -60,12 +69,14 @@
 </main>
 
 <footer>
-  <p>以文字內容比對；多欄排版、表格或掃描檔（圖片）的結果可能不理想。使用 <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> 與 <a href="https://github.com/kpdecker/jsdiff">jsdiff</a>。</p>
+  <p>以文字內容比對；多欄排版、表格或掃描檔（圖片）的結果可能不理想。使用 <a href="https://mozilla.github.io/pdf.js/">pdf.js</a>、<a href="https://github.com/kpdecker/jsdiff">jsdiff</a> 與 <a href="https://pdf-lib.js.org/">pdf-lib</a>。</p>
 </footer>
 
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/diff.min.js"></script>
+<script src="vendor/pdf-lib.min.js"></script>
 <script src="core.js"></script>
+<script src="marker.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

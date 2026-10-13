@@ -121,3 +121,14 @@ footer a { color: inherit; }
   button.primary { margin-left: 0; width: 100%; }
   .cell { grid-template-columns: 2.6em 1fr; font-size: 13px; }
 }
+
+.dl {
+  display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; padding: 14px 16px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+}
+.dl[hidden] { display: none; }
+.legend { font-size: 14px; color: var(--muted); }
+.legend .dot { margin-left: 0; }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; }
+button.primary.alt { margin-left: 0; }

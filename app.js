@@ -5,8 +5,9 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var state = {
-    A: { file: null, lines: null },
-    B: { file: null, lines: null }
+    A: { file: null, raw: null, pages: 0, buf: null },
+    B: { file: null, raw: null, pages: 0, buf: null },
+    marks: null
   };
   var blocks = [];   // first row element of every diff block
   var cur = -1;
@@ -21,7 +22,7 @@
   function extractPdf(file, onProgress) {
     return file.arrayBuffer().then(function (buf) {
       var task = pdfjsLib.getDocument({
-        data: new Uint8Array(buf),
+        data: new Uint8Array(buf.slice(0)),   // pdf.js may detach its copy; keep `buf` for pdf-lib
         cMapUrl: 'vendor/cmaps/',
         cMapPacked: true
       });
@@ -35,14 +36,16 @@
         for (var p = 1; p <= doc.numPages; p++) {
           (function (p) {
             chain = chain.then(function () { return doc.getPage(p); })
-              .then(function (page) { return page.getTextContent(); })
-              .then(function (tc) {
-                lines = lines.concat(PdfDiffCore.itemsToLines(tc.items, p));
-                if (onProgress) onProgress(p, doc.numPages);
+              .then(function (page) {
+                var vp = page.getViewport({ scale: 1 });
+                return page.getTextContent().then(function (tc) {
+                  lines = lines.concat(PdfDiffCore.itemsToLines(tc.items, p, vp));
+                  if (onProgress) onProgress(p, doc.numPages);
+                });
               });
           })(p);
         }
-        return chain.then(function () { return { lines: lines, pages: doc.numPages }; });
+        return chain.then(function () { return { lines: lines, pages: doc.numPages, buf: buf }; });
       });
     });
   }
@@ -50,7 +53,8 @@
   function loadFile(slot, file) {
     var s = state[slot];
     var drop = $('drop' + slot);
-    s.file = file; s.lines = null;
+    s.file = file; s.raw = null; s.buf = null; state.marks = null;
+    $('dl').hidden = true;
     $('name' + slot).textContent = file.name;
     $('meta' + slot).textContent = '讀取中…';
     drop.classList.add('filled');
@@ -59,7 +63,7 @@
       $('meta' + slot).textContent = '讀取中… ' + p + ' / ' + n + ' 頁';
     }).then(function (r) {
       if (state[slot].file !== file) return;
-      s.lines = r.lines;
+      s.raw = r.lines; s.pages = r.pages; s.buf = r.buf;
       var chars = r.lines.reduce(function (n, l) { return n + l.text.length; }, 0);
       $('meta' + slot).textContent = r.pages + ' 頁 · ' + r.lines.length + ' 行文字';
       if (chars < 20) {
@@ -70,7 +74,7 @@
       updateGo();
     }).catch(function (e) {
       if (state[slot].file !== file) return;
-      s.file = null; s.lines = null;
+      s.file = null; s.raw = null; s.buf = null;
       drop.classList.remove('filled');
       $('name' + slot).textContent = '拖曳 PDF 到這裡，或點擊選擇';
       $('meta' + slot).textContent = '';
@@ -80,11 +84,11 @@
   }
 
   function updateGo() {
-    $('go').disabled = !(state.A.lines && state.B.lines);
+    $('go').disabled = !(state.A.raw && state.B.raw);
   }
 
   function opts() {
-    return { ignoreCase: $('optCase').checked, ignoreSpaces: $('optSpace').checked };
+    return { ignoreCase: $('optCase').checked, ignoreSpaces: $('optSpace').checked, dropHdr: $('optHdr').checked };
   }
 
   function el(tag, cls, text) {
@@ -200,17 +204,24 @@
   }
 
   function compare() {
-    if (!(state.A.lines && state.B.lines)) return;
+    if (!(state.A.raw && state.B.raw)) return;
     setStatus('比對中…');
     // let the browser paint the status text first
     setTimeout(function () {
       try {
         var t0 = performance.now();
-        var result = PdfDiffCore.computeDiff(state.A.lines, state.B.lines, opts());
+        var o = opts();
+        var none = function (raw) { return { lines: raw, dropped: 0 }; };
+        var A = o.dropHdr ? PdfDiffCore.dropRepeatedHeaders(state.A.raw, state.A.pages) : none(state.A.raw);
+        var B = o.dropHdr ? PdfDiffCore.dropRepeatedHeaders(state.B.raw, state.B.pages) : none(state.B.raw);
+        var result = PdfDiffCore.computeDiff(A.lines, B.lines, o);
+        state.marks = PdfDiffCore.collectMarks(result.rows, A.lines, B.lines);
         $('result').hidden = false;
         render(result);
+        showDownloads();
         hasResult = true;
-        setStatus('完成，耗時 ' + Math.round(performance.now() - t0) + ' ms。');
+        var note = o.dropHdr ? '（已略過每頁重複的頁首/頁尾：原始 ' + A.dropped + ' 行、修訂後 ' + B.dropped + ' 行）' : '';
+        setStatus('完成，耗時 ' + Math.round(performance.now() - t0) + ' ms。' + note);
       } catch (e) {
         setStatus('比對失敗：' + (e && e.message ? e.message : e), 'err');
       }
@@ -225,7 +236,7 @@
       return;
     }
     setStatus('');
-    loadFile(slot, f).then(function () { if (hasResult && state.A.lines && state.B.lines) compare(); });
+    loadFile(slot, f).then(function () { if (hasResult && state.A.raw && state.B.raw) compare(); });
   }
 
   ['A', 'B'].forEach(function (slot) {
@@ -259,9 +270,44 @@
   });
 
   $('go').addEventListener('click', compare);
-  ['optCase', 'optSpace', 'optView'].forEach(function (id) {
+  ['optCase', 'optSpace', 'optView', 'optHdr'].forEach(function (id) {
     $(id).addEventListener('change', function () { if (hasResult) compare(); });
   });
+  function showDownloads() {
+    var m = state.marks;
+    $('dl').hidden = false;
+    $('dlA').textContent = '下載修訂前（已劃記，' + m.countA + ' 處）';
+    $('dlB').textContent = '下載修訂後（已劃記，' + m.countB + ' 處）';
+    $('dlA').disabled = $('dlB').disabled = false;
+  }
+
+  function baseName(f) { return f.name.replace(/\.pdf$/i, ''); }
+
+  function download(slot) {
+    var s = state[slot], isA = slot === 'A';
+    var btn = $('dl' + slot);
+    if (!s.buf || !state.marks) return;
+    btn.disabled = true;
+    setStatus('正在產生' + (isA ? '修訂前' : '修訂後') + '已劃記的 PDF…');
+    PdfMarker.markPdf(s.buf, isA ? state.marks.a : state.marks.b, {
+      color: isA ? [1, 0.6, 0.6] : [0.6, 0.95, 0.6],
+      removeHighlights: $('optStrip').checked
+    }).then(function (r) {
+      var url = URL.createObjectURL(new Blob([r.bytes], { type: 'application/pdf' }));
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = baseName(s.file) + (isA ? '_修訂前_已劃記.pdf' : '_修訂後_已劃記.pdf');
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+      setStatus('已產生「' + a.download + '」：標示 ' + r.drawn + ' 處' +
+        (r.removed ? '，並移除原檔 ' + r.removed + ' 個螢光標示' : '') + '。');
+    }).catch(function (e) {
+      setStatus('產生 PDF 失敗：' + (e && e.message ? e.message : e), 'err');
+    }).then(function () { btn.disabled = false; });
+  }
+  $('dlA').addEventListener('click', function () { download('A'); });
+  $('dlB').addEventListener('click', function () { download('B'); });
+
   $('next').addEventListener('click', function () { go(1); });
   $('prev').addEventListener('click', function () { go(-1); });
   document.addEventListener('keydown', function (e) {
